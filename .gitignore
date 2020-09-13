@@ -94,3 +94,4 @@ lint/tmp/
 .DS_Store
 /build
 /captures
+/.idea/jarRepositories.xml

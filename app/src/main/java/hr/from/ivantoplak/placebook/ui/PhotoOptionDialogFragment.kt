@@ -9,6 +9,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 
 class PhotoOptionDialogFragment : DialogFragment() {
+
     interface PhotoOptionDialogListener {
         fun onCaptureClick()
         fun onPickClick()

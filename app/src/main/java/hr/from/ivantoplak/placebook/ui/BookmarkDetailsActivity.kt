@@ -11,11 +11,9 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
-import androidx.lifecycle.Observer
 import hr.from.ivantoplak.placebook.R
 import hr.from.ivantoplak.placebook.model.BookmarkDetailsView
 import hr.from.ivantoplak.placebook.util.image.createUniqueImageFile
@@ -23,6 +21,7 @@ import hr.from.ivantoplak.placebook.util.image.decodeFileToSize
 import hr.from.ivantoplak.placebook.util.image.decodeUriStreamToSize
 import hr.from.ivantoplak.placebook.viewmodel.BookmarkDetailsViewModel
 import kotlinx.android.synthetic.main.activity_bookmark_details.*
+import org.koin.android.viewmodel.ext.android.viewModel
 import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
@@ -33,7 +32,7 @@ private const val REQUEST_GALLERY_IMAGE = 2
 class BookmarkDetailsActivity : AppCompatActivity(),
     PhotoOptionDialogFragment.PhotoOptionDialogListener {
 
-    private val bookmarkDetailsViewModel by viewModels<BookmarkDetailsViewModel>()
+    private val bookmarkDetailsViewModel: BookmarkDetailsViewModel by viewModel()
     private var bookmarkDetailsView: BookmarkDetailsView? = null
     private var photoFile: File? = null
 
@@ -80,7 +79,7 @@ class BookmarkDetailsActivity : AppCompatActivity(),
 
     private fun populateImageView() {
         bookmarkDetailsView?.let { bookmarkView ->
-            val placeImage = bookmarkView.getImage(this)
+            val placeImage = bookmarkDetailsViewModel.getImage(bookmarkView.id)
             placeImage?.let {
                 imageViewPlace.setImageBitmap(it)
             }
@@ -93,15 +92,14 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     private fun getIntentData() {
         val bundle = intent.getBundleExtra(BUNDLE_BOOKMARK_ID)
         val bookmarkId = bundle?.getLong(EXTRA_BOOKMARK_ID, 0L) ?: 0L
-        bookmarkDetailsViewModel.getBookmark(bookmarkId)?.observe(this,
-            Observer {
-                it?.let {
-                    bookmarkDetailsView = it
-                    populateFields()
-                    populateImageView()
-                    populateCategoryList()
-                }
-            })
+        bookmarkDetailsViewModel.getBookmark(bookmarkId)?.observe(this, {
+            it?.let {
+                bookmarkDetailsView = it
+                populateFields()
+                populateImageView()
+                populateCategoryList()
+            }
+        })
     }
 
     private fun saveChanges() {
@@ -164,7 +162,7 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     private fun updateImage(image: Bitmap) {
         bookmarkDetailsView?.let {
             imageViewPlace.setImageBitmap(image)
-            it.setImage(this, image)
+            bookmarkDetailsViewModel.setImage(image, it.id)
         }
     }
 
