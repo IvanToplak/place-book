@@ -8,32 +8,37 @@ import androidx.recyclerview.widget.RecyclerView
 import hr.from.ivantoplak.placebook.R
 import hr.from.ivantoplak.placebook.extensions.inflate
 import hr.from.ivantoplak.placebook.model.BookmarkView
-import hr.from.ivantoplak.placebook.ui.MapsActivity
 import kotlinx.android.synthetic.main.bookmark_item.view.*
 
 class BookmarkListAdapter(
-    private var bookmarkData: List<BookmarkView>,
-    private val mapsActivity: MapsActivity
+    private val bookmarkData: MutableList<BookmarkView>,
+    private val bookmarkListAdapterListener: BookmarkListAdapterListener
 ) : RecyclerView.Adapter<BookmarkListAdapter.ViewHolder>() {
 
-    class ViewHolder(v: View, private val mapsActivity: MapsActivity) : RecyclerView.ViewHolder(v) {
-        val nameTextView: TextView = v.bookmarkNameTextView
-        val categoryImageView: ImageView = v.bookmarkIcon
+    interface BookmarkListAdapterListener {
+        fun onMoveToBookmark(bookmark: BookmarkView)
+    }
+
+    inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val nameTextView: TextView = view.bookmarkNameTextView
+        val categoryImageView: ImageView = view.bookmarkIcon
+
         init {
-            v.setOnClickListener {
+            view.setOnClickListener {
                 val bookmarkView = itemView.tag as BookmarkView
-                mapsActivity.moveToBookmark(bookmarkView)
+                bookmarkListAdapterListener.onMoveToBookmark(bookmarkView)
             }
         }
     }
 
     fun setBookmarkData(bookmarks: List<BookmarkView>) {
-        this.bookmarkData = bookmarks
+        bookmarkData.clear()
+        bookmarkData.addAll(bookmarks)
         notifyDataSetChanged()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder =
-        ViewHolder(parent.inflate(R.layout.bookmark_item), mapsActivity)
+        ViewHolder(parent.inflate(R.layout.bookmark_item))
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val bookmarkViewData = bookmarkData[position]

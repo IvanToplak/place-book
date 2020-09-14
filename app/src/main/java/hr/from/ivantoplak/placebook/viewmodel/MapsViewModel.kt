@@ -1,22 +1,25 @@
 package hr.from.ivantoplak.placebook.viewmodel
 
-import android.app.Application
 import android.graphics.Bitmap
 import android.util.Log
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Transformations
+import androidx.lifecycle.ViewModel
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.model.Place
+import hr.from.ivantoplak.placebook.extensions.generateBookmarkImageFilename
 import hr.from.ivantoplak.placebook.model.Bookmark
 import hr.from.ivantoplak.placebook.model.BookmarkView
 import hr.from.ivantoplak.placebook.repository.BookmarkRepo
+import hr.from.ivantoplak.placebook.util.BitmapImageProvider
 
 private const val TAG = "MapsViewModel"
 
-class MapsViewModel(application: Application) : AndroidViewModel(application) {
+class MapsViewModel(
+    private val bookmarkRepo: BookmarkRepo,
+    private val bitmapImageProvider: BitmapImageProvider
+) : ViewModel() {
 
-    private val bookmarkRepo: BookmarkRepo = BookmarkRepo(getApplication())
     private var bookmarks: LiveData<List<BookmarkView>>? = null
 
     fun addBookmarkFromPlace(place: Place, image: Bitmap?) {
@@ -31,7 +34,9 @@ class MapsViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         val newBookmark = bookmarkRepo.addBookmark(bookmark)
-        image?.let { newBookmark?.setImage(it, getApplication()) }
+        if (image != null && newBookmark != null) {
+            bitmapImageProvider.setImage(image, newBookmark.id.generateBookmarkImageFilename())
+        }
         Log.i(TAG, "New bookmark ${newBookmark?.id} added to the database.")
     }
 
