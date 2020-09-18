@@ -35,13 +35,14 @@ import hr.from.ivantoplak.placebook.adapter.BookmarkInfoWindowAdapter
 import hr.from.ivantoplak.placebook.adapter.BookmarkListAdapter
 import hr.from.ivantoplak.placebook.adapter.BookmarkListAdapter.BookmarkListAdapterListener
 import hr.from.ivantoplak.placebook.extensions.*
-import hr.from.ivantoplak.placebook.model.BookmarkView
+import hr.from.ivantoplak.placebook.model.BookmarkViewData
 import hr.from.ivantoplak.placebook.model.PlaceInfo
+import hr.from.ivantoplak.placebook.util.ui.MessageProvider
 import hr.from.ivantoplak.placebook.viewmodel.MapsViewModel
 import kotlinx.android.synthetic.main.activity_maps.*
 import kotlinx.android.synthetic.main.drawer_view_maps.*
 import kotlinx.android.synthetic.main.main_view_maps.*
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.koin.android.scope.ScopeActivity
 import org.koin.android.viewmodel.ext.android.viewModel
@@ -51,11 +52,14 @@ private const val TAG = "MapsActivity"
 const val EXTRA_BOOKMARK_ID = "EXTRA_BOOKMARK_ID"
 const val BUNDLE_BOOKMARK_ID = "BUNDLE_BOOKMARK_ID"
 private const val AUTOCOMPLETE_REQUEST_CODE = 2
+private const val ADD_BOOKMARK_ERROR_MESSAGE = "Error occurred while adding a bookmark."
+private const val INVALID_MARKER_TAG_ERROR_MESSAGE = "Invalid marker tag."
 
 class MapsActivity : ScopeActivity(), OnMapReadyCallback, BookmarkListAdapterListener {
 
     private val mapsViewModel: MapsViewModel by viewModel()
     private val bookmarkInfoWindowAdapter: BookmarkInfoWindowAdapter by inject()
+    private val messageProvider: MessageProvider by inject()
 
     private lateinit var map: GoogleMap
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -88,7 +92,7 @@ class MapsActivity : ScopeActivity(), OnMapReadyCallback, BookmarkListAdapterLis
     override fun onMapReady(googleMap: GoogleMap) {
         map = googleMap
         setupMapListeners()
-        createBookmarkObserver()
+        getBookmarks()
         getCurrentLocation()
     }
 
@@ -123,13 +127,13 @@ class MapsActivity : ScopeActivity(), OnMapReadyCallback, BookmarkListAdapterLis
         }
     }
 
-    override fun onMoveToBookmark(bookmark: BookmarkView) {
+    override fun onMoveToBookmark(bookmarkViewData: BookmarkViewData) {
         drawerLayout.closeDrawer(drawerView)
-        val marker = markers[bookmark.id]
+        val marker = markers[bookmarkViewData.id]
         marker?.showInfoWindow()
         val location = Location("").apply {
-            latitude = bookmark.location.latitude
-            longitude = bookmark.location.longitude
+            latitude = bookmarkViewData.location.latitude
+            longitude = bookmarkViewData.location.longitude
         }
         updateMapToLocation(location)
     }
@@ -264,49 +268,78 @@ class MapsActivity : ScopeActivity(), OnMapReadyCallback, BookmarkListAdapterLis
             when (tag) {
                 is PlaceInfo -> {
                     tag.place?.let {
-                        lifecycle.coroutineScope.launch(Dispatchers.IO) {
-                            mapsViewModel.addBookmarkFromPlace(tag.place, tag.image)
+                        lifecycle.coroutineScope.launch {
+                            val result = runCatching {
+                                mapsViewModel.addBookmarkFromPlace(
+                                    tag.place,
+                                    tag.image
+                                )
+                            }
+                            result.onSuccess {
+                                messageProvider.shortPopup(getString(R.string.bookmark_created_message))
+                                marker.remove()
+                            }
+                            result.onFailure { exception ->
+                                messageProvider.longPopup(getString(R.string.add_bookmark_error_message))
+                                Log.e(TAG, ADD_BOOKMARK_ERROR_MESSAGE, exception)
+                            }
                         }
                     }
-                    marker.remove()
                 }
-                is BookmarkView -> {
+                is BookmarkViewData -> {
                     marker.hideInfoWindow()
                     startBookmarkDetails(tag.id)
                 }
+                else -> Log.e(TAG, INVALID_MARKER_TAG_ERROR_MESSAGE)
             }
         }
     }
 
-    private fun addPlaceMarker(bookmark: BookmarkView): Marker? {
+    private fun newBookmark(latLng: LatLng) {
+        lifecycle.coroutineScope.launch {
+            val bookmark = runCatching { mapsViewModel.addBookmark(latLng) }
+            bookmark.onSuccess {
+                it?.let {
+                    messageProvider.shortPopup(getString(R.string.bookmark_created_message))
+                    startBookmarkDetails(it.id)
+                }
+            }
+            bookmark.onFailure { exception ->
+                messageProvider.longPopup(getString(R.string.add_bookmark_error_message))
+                Log.e(TAG, ADD_BOOKMARK_ERROR_MESSAGE, exception)
+            }
+        }
+    }
+
+    private fun addPlaceMarker(bookmarkViewData: BookmarkViewData): Marker? {
         val marker = map.addMarker(
             MarkerOptions()
-                .position(bookmark.location)
-                .title(bookmark.name)
-                .snippet(bookmark.phone)
-                .icon(BitmapDescriptorFactory.fromResource(bookmark.categoryResourceId))
+                .position(bookmarkViewData.location)
+                .title(bookmarkViewData.name)
+                .snippet(bookmarkViewData.phone)
+                .icon(BitmapDescriptorFactory.fromResource(bookmarkViewData.categoryResourceId))
                 .alpha(0.8f)
         )
-        marker.tag = bookmark
-        markers[bookmark.id] = marker
+        marker.tag = bookmarkViewData
+        markers[bookmarkViewData.id] = marker
         return marker
     }
 
-    private fun displayAllBookmarks(bookmarks: List<BookmarkView>) {
+    private fun displayAllBookmarks(bookmarks: List<BookmarkViewData>) {
         for (bookmark in bookmarks) {
             addPlaceMarker(bookmark)
         }
     }
 
-    private fun createBookmarkObserver() {
-        mapsViewModel.getBookmarkViews()?.observe(this, {
-            map.clear()
-            markers.clear()
-            it?.let {
+    private fun getBookmarks() {
+        lifecycle.coroutineScope.launch {
+            mapsViewModel.getBookmarks()?.collect {
+                map.clear()
+                markers.clear()
                 displayAllBookmarks(it)
                 bookmarkListAdapter.setBookmarkData(it)
             }
-        })
+        }
     }
 
     private fun startBookmarkDetails(bookmarkId: Long) {
@@ -335,13 +368,6 @@ class MapsActivity : ScopeActivity(), OnMapReadyCallback, BookmarkListAdapterLis
             startActivityForResult(intent, AUTOCOMPLETE_REQUEST_CODE)
         } catch (e: GooglePlayServicesRepairableException) {
         } catch (e: GooglePlayServicesNotAvailableException) {
-        }
-    }
-
-    private fun newBookmark(latLng: LatLng) {
-        lifecycle.coroutineScope.launch(Dispatchers.IO) {
-            val bookmark = mapsViewModel.addBookmark(latLng)
-            bookmark?.let { startBookmarkDetails(bookmark.id) }
         }
     }
 

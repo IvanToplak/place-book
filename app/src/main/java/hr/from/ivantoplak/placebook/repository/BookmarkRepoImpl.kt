@@ -1,10 +1,10 @@
 package hr.from.ivantoplak.placebook.repository
 
-import androidx.lifecycle.LiveData
 import com.google.android.libraries.places.api.model.Place
 import hr.from.ivantoplak.placebook.R
 import hr.from.ivantoplak.placebook.db.BookmarkDao
 import hr.from.ivantoplak.placebook.model.Bookmark
+import kotlinx.coroutines.flow.Flow
 
 private const val DEFAULT_CATEGORY = "Other"
 
@@ -13,7 +13,7 @@ class BookmarkRepoImpl(private val bookmarkDao: BookmarkDao) : BookmarkRepo {
     private val categoryMap: Map<Place.Type, String> = buildCategoryMap()
     private val allCategories: Map<String, Int> = buildCategories()
 
-    override fun addBookmark(bookmark: Bookmark): Bookmark? {
+    override suspend fun addBookmark(bookmark: Bookmark): Bookmark? {
         if (bookmark.placeId.isNotEmpty()) {
             val savedBookmark = getBookmark(bookmark.placeId)
             savedBookmark?.let { return it }
@@ -22,16 +22,17 @@ class BookmarkRepoImpl(private val bookmarkDao: BookmarkDao) : BookmarkRepo {
         return bookmarkDao.loadBookmark(newId)
     }
 
-    override fun allBookmarks(): LiveData<List<Bookmark>> = bookmarkDao.loadAll()
+    override fun allBookmarks(): Flow<List<Bookmark>> = bookmarkDao.loadAll()
 
-    override fun getLiveBookmark(bookmarkId: Long): LiveData<Bookmark> =
+    override fun getLiveBookmark(bookmarkId: Long): Flow<Bookmark> =
         bookmarkDao.loadLiveBookmark(bookmarkId)
 
-    override fun updateBookmark(bookmark: Bookmark) = bookmarkDao.updateBookmark(bookmark)
+    override suspend fun updateBookmark(bookmark: Bookmark) = bookmarkDao.updateBookmark(bookmark)
 
-    override fun getBookmark(bookmarkId: Long): Bookmark? = bookmarkDao.loadBookmark(bookmarkId)
+    override suspend fun getBookmark(bookmarkId: Long): Bookmark? =
+        bookmarkDao.loadBookmark(bookmarkId)
 
-    private fun getBookmark(placeId: String): Bookmark? = bookmarkDao.loadBookmark(placeId)
+    private suspend fun getBookmark(placeId: String): Bookmark? = bookmarkDao.loadBookmark(placeId)
 
     override fun placeTypeToCategory(placeType: Place.Type): String =
         if (categoryMap.containsKey(placeType)) categoryMap[placeType].toString() else DEFAULT_CATEGORY
@@ -43,7 +44,7 @@ class BookmarkRepoImpl(private val bookmarkDao: BookmarkDao) : BookmarkRepo {
 
     override fun getCategories(): List<String> = ArrayList(allCategories.keys)
 
-    override fun deleteBookmark(bookmark: Bookmark) {
+    override suspend fun deleteBookmark(bookmark: Bookmark) {
         bookmarkDao.deleteBookmark(bookmark)
     }
 

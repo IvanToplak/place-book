@@ -1,10 +1,8 @@
-package hr.from.ivantoplak.placebook.util
+package hr.from.ivantoplak.placebook.util.image
 
 import android.content.Context
 import android.graphics.Bitmap
 import hr.from.ivantoplak.placebook.util.file.deleteFile
-import hr.from.ivantoplak.placebook.util.image.loadBitmapFromFile
-import hr.from.ivantoplak.placebook.util.image.saveBitmapToFile
 
 class BookmarkImageProviderImpl(private val context: Context) : BitmapImageProvider {
 

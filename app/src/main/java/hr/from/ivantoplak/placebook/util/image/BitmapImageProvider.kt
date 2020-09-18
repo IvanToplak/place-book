@@ -1,4 +1,4 @@
-package hr.from.ivantoplak.placebook.util
+package hr.from.ivantoplak.placebook.util.image
 
 import android.graphics.Bitmap
 

@@ -7,16 +7,16 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import hr.from.ivantoplak.placebook.R
 import hr.from.ivantoplak.placebook.extensions.inflate
-import hr.from.ivantoplak.placebook.model.BookmarkView
+import hr.from.ivantoplak.placebook.model.BookmarkViewData
 import kotlinx.android.synthetic.main.bookmark_item.view.*
 
 class BookmarkListAdapter(
-    private val bookmarkData: MutableList<BookmarkView>,
+    private val bookmarks: MutableList<BookmarkViewData>,
     private val bookmarkListAdapterListener: BookmarkListAdapterListener
 ) : RecyclerView.Adapter<BookmarkListAdapter.ViewHolder>() {
 
     interface BookmarkListAdapterListener {
-        fun onMoveToBookmark(bookmark: BookmarkView)
+        fun onMoveToBookmark(bookmarkViewData: BookmarkViewData)
     }
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -25,15 +25,15 @@ class BookmarkListAdapter(
 
         init {
             view.setOnClickListener {
-                val bookmarkView = itemView.tag as BookmarkView
+                val bookmarkView = itemView.tag as BookmarkViewData
                 bookmarkListAdapterListener.onMoveToBookmark(bookmarkView)
             }
         }
     }
 
-    fun setBookmarkData(bookmarks: List<BookmarkView>) {
-        bookmarkData.clear()
-        bookmarkData.addAll(bookmarks)
+    fun setBookmarkData(bookmarks: List<BookmarkViewData>) {
+        this.bookmarks.clear()
+        this.bookmarks.addAll(bookmarks)
         notifyDataSetChanged()
     }
 
@@ -41,11 +41,11 @@ class BookmarkListAdapter(
         ViewHolder(parent.inflate(R.layout.bookmark_item))
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val bookmarkViewData = bookmarkData[position]
+        val bookmarkViewData = bookmarks[position]
         holder.itemView.tag = bookmarkViewData
         holder.nameTextView.text = bookmarkViewData.name
         holder.categoryImageView.setImageResource(bookmarkViewData.categoryResourceId)
     }
 
-    override fun getItemCount(): Int = bookmarkData.size
+    override fun getItemCount(): Int = bookmarks.size
 }

@@ -17,4 +17,10 @@
     <string name="hint_phone_number">Phone number</string>
     <string name="bookmark_address">Address</string>
     <string name="hint_address">Address</string>
+    <string name="add_bookmark_error_message">Error occurred while adding a bookmark.</string>
+    <string name="update_bookmark_error_message">Error occurred while updating a bookmark.</string>
+    <string name="delete_bookmark_error_message">Error occurred while deleting a bookmark.</string>
+    <string name="bookmark_created_message">Bookmark created.</string>
+    <string name="bookmark_updated_message">Bookmark updated.</string>
+    <string name="bookmark_deleted_message">Bookmark deleted.</string>
 </resources>

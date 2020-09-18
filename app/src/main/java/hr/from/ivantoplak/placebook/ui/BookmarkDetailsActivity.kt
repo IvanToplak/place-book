@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -14,26 +15,36 @@ import android.widget.ArrayAdapter
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.lifecycle.coroutineScope
 import hr.from.ivantoplak.placebook.R
-import hr.from.ivantoplak.placebook.model.BookmarkDetailsView
+import hr.from.ivantoplak.placebook.model.BookmarkDetailsViewData
 import hr.from.ivantoplak.placebook.util.image.createUniqueImageFile
 import hr.from.ivantoplak.placebook.util.image.decodeFileToSize
 import hr.from.ivantoplak.placebook.util.image.decodeUriStreamToSize
+import hr.from.ivantoplak.placebook.util.ui.MessageProvider
 import hr.from.ivantoplak.placebook.viewmodel.BookmarkDetailsViewModel
 import kotlinx.android.synthetic.main.activity_bookmark_details.*
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
 import org.koin.android.viewmodel.ext.android.viewModel
 import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
 
+private const val TAG = "BookmarkDetailsActivity"
 private const val REQUEST_CAPTURE_IMAGE = 1
 private const val REQUEST_GALLERY_IMAGE = 2
+private const val UPDATE_BOOKMARK_ERROR_MESSAGE = "Error occurred while updating a bookmark."
+private const val DELETE_BOOKMARK_ERROR_MESSAGE = "Error occurred while deleting a bookmark."
 
 class BookmarkDetailsActivity : AppCompatActivity(),
     PhotoOptionDialogFragment.PhotoOptionDialogListener {
 
     private val bookmarkDetailsViewModel: BookmarkDetailsViewModel by viewModel()
-    private var bookmarkDetailsView: BookmarkDetailsView? = null
+    private val messageProvider: MessageProvider by inject()
+
+    private var bookmarkDetailsViewData: BookmarkDetailsViewData? = null
     private var photoFile: File? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,7 +80,7 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     }
 
     private fun populateFields() {
-        bookmarkDetailsView?.let { bookmarkView ->
+        bookmarkDetailsViewData?.let { bookmarkView ->
             editTextName.setText(bookmarkView.name)
             editTextPhone.setText(bookmarkView.phone)
             editTextNotes.setText(bookmarkView.notes)
@@ -78,7 +89,7 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     }
 
     private fun populateImageView() {
-        bookmarkDetailsView?.let { bookmarkView ->
+        bookmarkDetailsViewData?.let { bookmarkView ->
             val placeImage = bookmarkDetailsViewModel.getImage(bookmarkView.id)
             placeImage?.let {
                 imageViewPlace.setImageBitmap(it)
@@ -92,29 +103,42 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     private fun getIntentData() {
         val bundle = intent.getBundleExtra(BUNDLE_BOOKMARK_ID)
         val bookmarkId = bundle?.getLong(EXTRA_BOOKMARK_ID, 0L) ?: 0L
-        bookmarkDetailsViewModel.getBookmark(bookmarkId)?.observe(this, {
-            it?.let {
-                bookmarkDetailsView = it
+
+        lifecycle.coroutineScope.launch {
+            bookmarkDetailsViewModel.getBookmark(bookmarkId)?.collect { bookmarkData ->
+                bookmarkDetailsViewData = bookmarkData
                 populateFields()
                 populateImageView()
                 populateCategoryList()
             }
-        })
+        }
     }
 
     private fun saveChanges() {
         if (editTextName.text.isNullOrBlank()) return
-        bookmarkDetailsView?.let { bookmarkView ->
-            val updatedBookmarkView = bookmarkView.copy(
-                name = editTextName.text.toString(),
-                notes = editTextNotes.text.toString(),
-                address = editTextAddress.text.toString(),
-                phone = editTextPhone.text.toString(),
-                category = spinnerCategory.selectedItem as String
-            )
-            bookmarkDetailsViewModel.updateBookmark(updatedBookmarkView)
+        bookmarkDetailsViewData?.let { bookmarkView ->
+            lifecycle.coroutineScope.launch {
+                val result = runCatching {
+                    val updatedBookmarkView = bookmarkView.copy(
+                        name = editTextName.text.toString(),
+                        notes = editTextNotes.text.toString(),
+                        address = editTextAddress.text.toString(),
+                        phone = editTextPhone.text.toString(),
+                        category = spinnerCategory.selectedItem as String
+                    )
+
+                    bookmarkDetailsViewModel.updateBookmark(updatedBookmarkView)
+                }
+                result.onSuccess {
+                    messageProvider.shortPopup(getString(R.string.bookmark_updated_message))
+                    finish()
+                }
+                result.onFailure { exception ->
+                    messageProvider.longPopup(getString(R.string.update_bookmark_error_message))
+                    Log.e(TAG, UPDATE_BOOKMARK_ERROR_MESSAGE, exception)
+                }
+            }
         }
-        finish()
     }
 
     override fun onCaptureClick() {
@@ -160,7 +184,7 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     }
 
     private fun updateImage(image: Bitmap) {
-        bookmarkDetailsView?.let {
+        bookmarkDetailsViewData?.let {
             imageViewPlace.setImageBitmap(image)
             bookmarkDetailsViewModel.setImage(image, it.id)
         }
@@ -207,7 +231,7 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     )
 
     private fun populateCategoryList() {
-        bookmarkDetailsView?.let { bookmarkView ->
+        bookmarkDetailsViewData?.let { bookmarkView ->
             val resourceId = bookmarkDetailsViewModel.getCategoryResourceId(bookmarkView.category)
             imageViewCategory.setImageResource(resourceId)
 
@@ -241,12 +265,23 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     }
 
     private fun deleteBookmark() {
-        bookmarkDetailsView?.let { bookmarkView ->
+        bookmarkDetailsViewData?.let { bookmarkView ->
             AlertDialog.Builder(this)
                 .setMessage("Delete?")
                 .setPositiveButton("Ok") { _, _ ->
-                    bookmarkDetailsViewModel.deleteBookmark(bookmarkView)
-                    finish()
+                    lifecycle.coroutineScope.launch {
+                        val result = runCatching {
+                            bookmarkDetailsViewModel.deleteBookmark(bookmarkView)
+                        }
+                        result.onSuccess {
+                            messageProvider.shortPopup(getString(R.string.bookmark_deleted_message))
+                            finish()
+                        }
+                        result.onFailure { exception ->
+                            messageProvider.longPopup(getString(R.string.delete_bookmark_error_message))
+                            Log.e(TAG, DELETE_BOOKMARK_ERROR_MESSAGE, exception)
+                        }
+                    }
                 }
                 .setNegativeButton("Cancel", null)
                 .create().show()
@@ -254,7 +289,7 @@ class BookmarkDetailsActivity : AppCompatActivity(),
     }
 
     private fun sharePlace() {
-        bookmarkDetailsView?.let { bookmarkView ->
+        bookmarkDetailsViewData?.let { bookmarkView ->
             val mapUrl = if (bookmarkView.placeId.isEmpty()) {
                 val location =
                     URLEncoder.encode("${bookmarkView.latitude},${bookmarkView.longitude}", "utf-8")

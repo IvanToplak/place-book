@@ -1,35 +1,46 @@
 package hr.from.ivantoplak.placebook.viewmodel
 
 import android.graphics.Bitmap
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.Transformations
+import android.util.Log
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import hr.from.ivantoplak.placebook.coroutines.CoroutineContextProvider
 import hr.from.ivantoplak.placebook.extensions.generateBookmarkImageFilename
-import hr.from.ivantoplak.placebook.model.Bookmark
-import hr.from.ivantoplak.placebook.model.BookmarkDetailsView
+import hr.from.ivantoplak.placebook.mappings.toBookmark
+import hr.from.ivantoplak.placebook.mappings.toBookmarkDetailsViewData
+import hr.from.ivantoplak.placebook.model.BookmarkDetailsViewData
 import hr.from.ivantoplak.placebook.repository.BookmarkRepo
-import hr.from.ivantoplak.placebook.util.BitmapImageProvider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import hr.from.ivantoplak.placebook.util.image.BitmapImageProvider
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+
+private const val TAG = "BookmarkViewModel"
+private const val GET_BOOKMARK_ERROR_MESSAGE = "Error occurred while getting current bookmark data."
 
 class BookmarkDetailsViewModel(
     private val bookmarkRepo: BookmarkRepo,
-    private val bitmapImageProvider: BitmapImageProvider
+    private val bitmapImageProvider: BitmapImageProvider,
+    private val coroutineContextProvider: CoroutineContextProvider
 ) : ViewModel() {
-    private var bookmarkDetailsView: LiveData<BookmarkDetailsView>? = null
+    private var bookmarkDetailsViewDataFlow: Flow<BookmarkDetailsViewData>? = null
 
-    fun getBookmark(bookmarkId: Long): LiveData<BookmarkDetailsView>? {
-        if (bookmarkDetailsView == null) {
-            mapBookmarkToBookmarkView(bookmarkId)
+    fun getBookmark(bookmarkId: Long): Flow<BookmarkDetailsViewData>? {
+        if (bookmarkDetailsViewDataFlow == null) {
+            bookmarkDetailsViewDataFlow = bookmarkRepo.getLiveBookmark(bookmarkId)
+                .map { bookmark -> bookmark.toBookmarkDetailsViewData() }
+                .flowOn(coroutineContextProvider.io())
+                .catch { exception -> Log.e(TAG, GET_BOOKMARK_ERROR_MESSAGE, exception) }
         }
-        return bookmarkDetailsView
+        return bookmarkDetailsViewDataFlow
     }
 
-    fun updateBookmark(bookmarkView: BookmarkDetailsView) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val bookmark = bookmarkViewToBookmark(bookmarkView)
-            bookmark?.let { bookmarkRepo.updateBookmark(it) }
+    suspend fun updateBookmark(bookmarkDetailsViewData: BookmarkDetailsViewData) {
+        val dbBookmark = bookmarkRepo.getBookmark(bookmarkDetailsViewData.id)
+        dbBookmark?.let { oldBookmark ->
+            val newBookmark = bookmarkDetailsViewData.toBookmark(oldBookmark)
+            bookmarkRepo.updateBookmark(newBookmark)
         }
     }
 
@@ -37,48 +48,14 @@ class BookmarkDetailsViewModel(
 
     fun getCategories(): List<String> = bookmarkRepo.getCategories()
 
-    fun deleteBookmark(bookmarkDetailsView: BookmarkDetailsView) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val bookmark = bookmarkRepo.getBookmark(bookmarkDetailsView.id)
+    suspend fun deleteBookmark(bookmarkDetailsViewData: BookmarkDetailsViewData) =
+        withContext(coroutineContextProvider.io()) {
+            val bookmark = bookmarkRepo.getBookmark(bookmarkDetailsViewData.id)
             bookmark?.let {
                 bitmapImageProvider.deleteImage(it.id.generateBookmarkImageFilename())
                 bookmarkRepo.deleteBookmark(it)
             }
         }
-    }
-
-    private fun bookmarkToBookmarkView(bookmark: Bookmark): BookmarkDetailsView =
-        BookmarkDetailsView(
-            id = bookmark.id,
-            name = bookmark.name,
-            phone = bookmark.phone,
-            address = bookmark.address,
-            notes = bookmark.notes,
-            category = bookmark.category,
-            longitude = bookmark.longitude,
-            latitude = bookmark.latitude,
-            placeId = bookmark.placeId
-        )
-
-    private fun mapBookmarkToBookmarkView(bookmarkId: Long) {
-        val bookmark = bookmarkRepo.getLiveBookmark(bookmarkId)
-        bookmarkDetailsView = Transformations.map(bookmark) { repoBookmark ->
-            repoBookmark?.let {
-                bookmarkToBookmarkView(it)
-            }
-        }
-    }
-
-    private fun bookmarkViewToBookmark(bookmarkView: BookmarkDetailsView): Bookmark? {
-        val bookmark = bookmarkRepo.getBookmark(bookmarkView.id)
-        return bookmark?.copy(
-            name = bookmarkView.name,
-            phone = bookmarkView.phone,
-            address = bookmarkView.address,
-            notes = bookmarkView.notes,
-            category = bookmarkView.category
-        )
-    }
 
     fun getImage(id: Long): Bitmap? =
         bitmapImageProvider.getImage(id.generateBookmarkImageFilename())
