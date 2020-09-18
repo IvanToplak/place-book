@@ -1,6 +1,6 @@
 package hr.from.ivantoplak.placebook.model
 
-data class BookmarkDetailsView(
+data class BookmarkDetailsViewData(
     val id: Long = 0,
     val name: String = "",
     val phone: String = "",

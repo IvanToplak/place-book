@@ -6,9 +6,9 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.Marker
 import hr.from.ivantoplak.placebook.R
 import hr.from.ivantoplak.placebook.extensions.generateBookmarkImageFilename
-import hr.from.ivantoplak.placebook.model.BookmarkView
+import hr.from.ivantoplak.placebook.model.BookmarkViewData
 import hr.from.ivantoplak.placebook.model.PlaceInfo
-import hr.from.ivantoplak.placebook.util.BitmapImageProvider
+import hr.from.ivantoplak.placebook.util.image.BitmapImageProvider
 import kotlinx.android.synthetic.main.content_bookmark_info.view.*
 
 class BookmarkInfoWindowAdapter(
@@ -25,7 +25,7 @@ class BookmarkInfoWindowAdapter(
             it.tag?.let { tag ->
                 when (tag) {
                     is PlaceInfo -> contents.photo.setImageBitmap(tag.image)
-                    is BookmarkView -> contents.photo.setImageBitmap(
+                    is BookmarkViewData -> contents.photo.setImageBitmap(
                         bitmapImageProvider.getImage(
                             tag.id.generateBookmarkImageFilename()
                         )

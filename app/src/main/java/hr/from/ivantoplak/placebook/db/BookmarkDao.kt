@@ -1,32 +1,32 @@
 package hr.from.ivantoplak.placebook.db
 
-import androidx.lifecycle.LiveData
 import androidx.room.*
 import androidx.room.OnConflictStrategy.IGNORE
 import androidx.room.OnConflictStrategy.REPLACE
 import hr.from.ivantoplak.placebook.model.Bookmark
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BookmarkDao {
 
     @Query("SELECT * FROM Bookmark ORDER BY name")
-    fun loadAll(): LiveData<List<Bookmark>>
+    fun loadAll(): Flow<List<Bookmark>>
 
     @Query("SELECT * FROM Bookmark WHERE id = :bookmarkId")
-    fun loadBookmark(bookmarkId: Long): Bookmark?
+    suspend fun loadBookmark(bookmarkId: Long): Bookmark?
 
     @Query("SELECT * FROM Bookmark WHERE placeId = :placeId AND placeId <> ''")
-    fun loadBookmark(placeId: String): Bookmark?
+    suspend fun loadBookmark(placeId: String): Bookmark?
 
     @Query("SELECT * FROM Bookmark WHERE id = :bookmarkId")
-    fun loadLiveBookmark(bookmarkId: Long): LiveData<Bookmark>
+    fun loadLiveBookmark(bookmarkId: Long): Flow<Bookmark>
 
     @Insert(onConflict = IGNORE)
-    fun insertBookmark(bookmark: Bookmark): Long
+    suspend fun insertBookmark(bookmark: Bookmark): Long
 
     @Update(onConflict = REPLACE)
-    fun updateBookmark(bookmark: Bookmark)
+    suspend fun updateBookmark(bookmark: Bookmark)
 
     @Delete
-    fun deleteBookmark(bookmark: Bookmark)
+    suspend fun deleteBookmark(bookmark: Bookmark)
 }
